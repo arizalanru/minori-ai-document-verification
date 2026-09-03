@@ -1,14 +1,207 @@
 <!doctype html>
-<html lang="id"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>Minori · Review Berkas</title><link rel="stylesheet" href="/static/admin.css"><script src="/static/admin.js" defer></script></head>
-<body>
-<header><a class="brand" href="/">M<span>MINORI <small>Review Berkas</small></span></a><span class="demo">DEMO LOKAL · DATA SINTETIS</span><a href="/docs" target="_blank" rel="noopener">Dokumentasi API ↗</a></header>
-<div id="notice" role="status" aria-live="polite" hidden></div>
-<div class="layout"><aside><div class="section-title"><h2>Pendaftaran</h2><button id="refresh" title="Muat ulang">↻ Muat ulang</button></div><button class="primary wide" id="new">+ Pendaftaran baru</button><div id="applications"></div><div class="pager"><button id="prev">← Sebelumnya</button><button id="next">Berikutnya →</button></div><p class="muted">Hasil berlaku untuk aturan administrasi demo. Keputusan penerimaan tetap melalui proses seleksi.</p></aside>
-<main><div id="empty" class="empty"><h1>Mulai dari satu pendaftaran</h1><p>Pilih pendaftaran atau buat yang baru untuk meninjau berkas.</p></div><section id="workspace" hidden>
-<div class="section-title"><div><p class="eyebrow" id="profile"></p><h1 id="app-name"></h1><p id="app-meta" class="muted mono"></p></div><span id="outcome" class="badge"></span></div>
-<section class="card"><div class="section-title"><h2>Hasil pemeriksaan</h2><button id="evaluate">Evaluasi ulang</button></div><p id="missing" class="muted"></p><div id="rules" class="rules"></div><div id="reject-area" hidden><label>Alasan konfirmasi tidak memenuhi syarat<input id="reject-reason" maxlength="2000"></label><button id="reject" class="danger">Konfirmasi tidak memenuhi syarat</button></div></section>
-<section class="card"><div class="section-title"><h2>Dokumen peserta</h2><span class="muted">JPG / PNG · satu halaman per berkas</span></div><form id="upload-form" class="upload"><label>Jenis dokumen<select id="upload-kind"><option>KTP</option><option>IJAZAH</option><option>KK</option><option>TRANSKRIP</option><option>SKCK</option><option>MCU</option></select></label><label>Gambar sintetis<input id="upload-file" type="file" accept="image/png,image/jpeg" required></label><button class="primary" type="submit">Upload berkas</button></form><div id="tabs" class="tabs"></div>
-<div id="doc-empty" class="empty">Belum ada dokumen. Upload gambar untuk memulai.</div><div id="doc-workspace" hidden><div class="section-title"><p id="doc-meta" class="muted"></p><button id="process">Jalankan OCR + LLM</button></div><div class="review-grid"><div><div class="section-title"><h3>Gambar sumber</h3><a id="original" target="_blank" rel="noopener">Buka ukuran asli ↗</a></div><div class="image-wrap"><img id="document-image" alt="Gambar dokumen yang sedang ditinjau"><svg id="overlay" aria-hidden="true"></svg></div><details><summary>Teks OCR dan bukti</summary><div id="blocks"></div></details></div><form id="review-form"><h3>Periksa hasil ekstraksi</h3><p class="muted">Klik bukti untuk menyorot teks pada gambar. Koreksi nilai jika diperlukan.</p><div id="fields"></div><label>Catatan review<textarea id="reason" rows="2" maxlength="2000" required placeholder="Jelaskan hasil pemeriksaan gambar"></textarea></label><label class="check"><input id="confirmed" type="checkbox">Saya telah memeriksa gambar halaman 1 dan nilai di atas.</label><div class="actions"><button type="submit" class="primary">Simpan & verifikasi</button><button type="button" id="reupload">Minta upload ulang</button></div></form></div></div></section>
-<section class="card"><h2>Riwayat review</h2><div id="history"></div></section></section></main></div>
-<dialog id="create-dialog"><form id="create-form"><h2>Pendaftaran baru</h2><p class="muted">Gunakan dokumen sintetis untuk demonstrasi.</p><label>Profil aturan<select id="create-profile"><option value="demo-core-v1">Demo inti · KTP + Ijazah</option><option value="demo-full-v1">Demo lengkap · 6 dokumen</option></select></label><p class="muted">Usia 18–30 tahun pada 4 September 2026, minimal SMA. Dokumen selain KTP dan ijazah ditinjau manual.</p><div class="actions"><button type="button" id="cancel-create">Batal</button><button class="primary" type="submit">Buat pendaftaran</button></div></form></dialog>
-</body></html>
+<html lang="id">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Minori - Pemeriksaan Berkas</title>
+    <link rel="stylesheet" href="/static/admin.css">
+    <script src="/static/admin.js" defer></script>
+  </head>
+  <body>
+    <a class="skip-link" href="#main-content">Lewati ke konten utama</a>
+
+    <header class="topbar">
+      <a class="brand" href="/">
+        <span class="brand-name">MINORI</span>
+        <span class="brand-product">Pemeriksaan berkas</span>
+      </a>
+      <div class="environment-label">
+        <strong>Demo lokal</strong>
+        <span>Gunakan data sintetis</span>
+      </div>
+      <a class="api-link" href="/docs" target="_blank" rel="noopener">Dokumentasi API</a>
+    </header>
+
+    <div id="notice" role="status" aria-live="polite" hidden></div>
+
+    <div class="layout">
+      <aside class="sidebar" aria-label="Daftar calon peserta">
+        <div class="sidebar-heading">
+          <div>
+            <p class="eyebrow">Pemeriksaan berkas</p>
+            <h2>Daftar calon peserta</h2>
+          </div>
+          <button id="refresh" type="button">Muat ulang</button>
+        </div>
+        <button class="primary wide" id="new" type="button">Tambah calon peserta</button>
+        <div id="applications" class="application-list"></div>
+        <div class="pager" aria-label="Navigasi daftar calon peserta">
+          <button id="prev" type="button">Sebelumnya</button>
+          <button id="next" type="button">Berikutnya</button>
+        </div>
+        <p class="sidebar-note">Hasil menggunakan aturan demonstrasi dan bukan keputusan penerimaan.</p>
+      </aside>
+
+      <main id="main-content">
+        <div id="empty" class="empty-state">
+          <p class="eyebrow">Belum ada peserta dipilih</p>
+          <h1>Pilih calon peserta untuk mulai memeriksa</h1>
+          <p>Pilih dari daftar di samping atau tambahkan calon peserta baru untuk demonstrasi.</p>
+        </div>
+
+        <section id="workspace" hidden>
+          <header class="participant-header">
+            <div class="participant-identity">
+              <p class="eyebrow" id="profile"></p>
+              <h1 id="app-name"></h1>
+              <p id="profile-note" class="muted"></p>
+            </div>
+            <div class="participant-state">
+              <span class="eyebrow">Status pendaftaran</span>
+              <strong id="outcome" class="status-label"></strong>
+              <details class="technical-details">
+                <summary>Detail teknis</summary>
+                <dl>
+                  <div><dt>ID pendaftaran</dt><dd id="technical-application-id" class="mono"></dd></div>
+                  <div><dt>Versi data</dt><dd id="technical-revision"></dd></div>
+                  <div><dt>Kode profil</dt><dd id="technical-profile" class="mono"></dd></div>
+                </dl>
+              </details>
+            </div>
+          </header>
+
+          <section class="workflow-summary" aria-labelledby="next-action-title">
+            <span id="next-action-title" class="eyebrow">Tindakan berikutnya</span>
+            <p id="next-action"></p>
+          </section>
+
+          <div class="main-tabs" role="tablist" aria-label="Bagian pendaftaran">
+            <button id="main-tab-documents" type="button" role="tab" aria-selected="true" aria-controls="panel-documents" data-main-tab="documents">Dokumen</button>
+            <button id="main-tab-results" type="button" role="tab" aria-selected="false" aria-controls="panel-results" data-main-tab="results" tabindex="-1">Hasil pemeriksaan</button>
+            <button id="main-tab-history" type="button" role="tab" aria-selected="false" aria-controls="panel-history" data-main-tab="history" tabindex="-1">Riwayat</button>
+          </div>
+
+          <section id="panel-documents" class="tab-panel" role="tabpanel" aria-labelledby="main-tab-documents">
+            <details id="document-completeness" class="completeness-panel">
+              <summary>
+                <span>Kelengkapan dokumen</span>
+                <span id="completeness-summary" class="muted"></span>
+              </summary>
+              <div class="completeness-content">
+                <p id="missing" class="document-guidance"></p>
+                <p class="helper-text">JPG atau PNG, satu halaman per berkas. Gunakan data sintetis untuk demo.</p>
+                <div id="document-list" class="document-list"></div>
+              </div>
+            </details>
+
+            <div id="document-tabs" class="document-tabs" role="tablist" aria-label="Dokumen peserta"></div>
+
+            <div id="doc-empty" class="document-empty" role="tabpanel" hidden>
+              <h2 id="doc-empty-title"></h2>
+              <p id="doc-empty-text"></p>
+              <button id="doc-empty-upload" type="button">Unggah</button>
+            </div>
+
+            <section id="doc-workspace" class="document-workspace" role="tabpanel" hidden>
+              <header class="document-header">
+                <div class="document-title-row">
+                  <h2 id="document-title"></h2>
+                  <span id="document-status" class="status-label"></span>
+                </div>
+                <button id="process" type="button">Baca data dari dokumen</button>
+              </header>
+
+              <div class="review-grid">
+                <div class="source-column">
+                  <div class="subsection-heading">
+                    <h3>Gambar sumber</h3>
+                    <a id="original" target="_blank" rel="noopener">Buka gambar</a>
+                  </div>
+                  <div class="image-wrap">
+                    <img id="document-image" alt="Dokumen yang sedang diperiksa">
+                    <svg id="overlay" aria-hidden="true"></svg>
+                  </div>
+                  <details class="ocr-details">
+                    <summary>Detail teks hasil pembacaan</summary>
+                    <p class="helper-text">Skor model dan ID blok adalah informasi teknis, bukan jaminan kebenaran data.</p>
+                    <div id="blocks"></div>
+                  </details>
+                </div>
+
+                <form id="review-form" class="review-form">
+                  <div class="subsection-heading stacked">
+                    <h3>Data yang perlu diperiksa</h3>
+                    <p class="helper-text">Cocokkan setiap nilai dengan gambar. Koreksi hanya bila diperlukan.</p>
+                  </div>
+                  <div id="fields"></div>
+                  <div class="form-control">
+                    <label for="reason">Catatan pemeriksaan</label>
+                    <textarea id="reason" rows="3" maxlength="2000" required placeholder="Jelaskan hasil pemeriksaan gambar"></textarea>
+                  </div>
+                  <label class="check-row">
+                    <input id="confirmed" type="checkbox">
+                    <span>Saya telah mencocokkan data dengan gambar halaman 1.</span>
+                  </label>
+                  <div class="actions">
+                    <button type="submit" class="primary">Simpan dan verifikasi</button>
+                    <button type="button" id="reupload">Catat permintaan unggah ulang</button>
+                  </div>
+                  <p class="helper-text">Permintaan unggah ulang hanya dicatat di aplikasi ini dan tidak mengirim notifikasi kepada peserta.</p>
+                </form>
+              </div>
+
+              <details class="technical-details document-technical-details">
+                <summary>Detail teknis dokumen</summary>
+                <dl>
+                  <div><dt>ID versi dokumen</dt><dd id="technical-document-id" class="mono"></dd></div>
+                  <div><dt>Nomor versi</dt><dd id="technical-document-version"></dd></div>
+                  <div><dt>Status internal</dt><dd id="technical-document-status" class="mono"></dd></div>
+                </dl>
+              </details>
+            </section>
+          </section>
+
+          <section id="panel-results" class="tab-panel" role="tabpanel" aria-labelledby="main-tab-results" hidden>
+            <div class="section-heading">
+              <div><p class="eyebrow">Dasar hasil</p><h2>Pemeriksaan persyaratan</h2></div>
+              <button id="evaluate" type="button">Periksa ulang persyaratan</button>
+            </div>
+            <div id="rules" class="rules"></div>
+            <div id="reject-area" class="confirmation-panel" hidden>
+              <p>Hasil ini belum menjadi keputusan akhir sampai dikonfirmasi admin.</p>
+              <label for="reject-reason">Alasan konfirmasi</label>
+              <input id="reject-reason" maxlength="2000" placeholder="Jelaskan dasar konfirmasi">
+              <button id="reject" class="danger" type="button">Konfirmasi tidak memenuhi syarat</button>
+            </div>
+          </section>
+
+          <section id="panel-history" class="tab-panel" role="tabpanel" aria-labelledby="main-tab-history" hidden>
+            <div class="section-heading">
+              <div><p class="eyebrow">Jejak pemeriksaan</p><h2>Riwayat tindakan admin</h2></div>
+            </div>
+            <div id="history"></div>
+          </section>
+        </section>
+      </main>
+    </div>
+
+    <dialog id="create-dialog">
+      <form id="create-form">
+        <h2>Tambah calon peserta</h2>
+        <p class="muted">Buat pendaftaran demonstrasi dan gunakan dokumen sintetis.</p>
+        <div class="form-control">
+          <label for="create-profile">Jenis pemeriksaan</label>
+          <select id="create-profile">
+            <option value="demo-core-v1">Pemeriksaan KTP dan ijazah</option>
+            <option value="demo-full-v1">Pemeriksaan enam dokumen</option>
+          </select>
+        </div>
+        <p class="helper-text">Profil memakai asumsi aturan demonstrasi, bukan kebijakan resmi. Dokumen selain KTP dan ijazah diperiksa manual.</p>
+        <div class="actions dialog-actions">
+          <button type="button" id="cancel-create">Batal</button>
+          <button class="primary" type="submit">Tambah peserta</button>
+        </div>
+      </form>
+    </dialog>
+  </body>
+</html>
