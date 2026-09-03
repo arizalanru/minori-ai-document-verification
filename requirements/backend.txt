@@ -1,0 +1,4 @@
+-r base.txt
+Pillow>=10,<13
+google-genai<3
+# Runtime PaddlePaddle/PaddleOCR dipasang terpisah sesuai platform.

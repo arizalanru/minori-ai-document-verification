@@ -1,0 +1,28 @@
+{
+  "id": "demo-core-v1",
+  "demo_only": true,
+  "description": "Asumsi demo; bukan kebijakan resmi program.",
+  "reference_date": "2026-09-04",
+  "age_min": 18,
+  "age_max": 30,
+  "minimum_education": "SMA",
+  "required_documents": [
+    "KTP",
+    "IJAZAH"
+  ],
+  "critical_fields_require_review": true,
+  "education_rank": {
+    "SD": 1,
+    "SMP": 2,
+    "SMA": 3,
+    "SMK": 3,
+    "MA": 3,
+    "D1": 4,
+    "D2": 5,
+    "D3": 6,
+    "D4": 7,
+    "S1": 7,
+    "S2": 8,
+    "S3": 9
+  }
+}
