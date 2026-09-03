@@ -87,9 +87,9 @@ class BackendTests(unittest.TestCase):
         self.backend.change_profile(self.aid,'demo-full-v1',self.rev(),'Profil lengkap')
         out=self.backend.get(self.aid)
         self.assertEqual(out['outcome'],'REVIEW'); self.assertEqual(len(out['missing_documents']),4)
-    def test_unsupported_doc_stays_manual(self):
+    def test_extended_doc_requires_its_schema(self):
         vid=self.upload('MCU'); out=self.backend.process(vid,self.rev())
-        self.assertEqual(out['status'],'MANUAL_ONLY')
+        self.assertEqual(out['status'],'FAILED')
         self.assertEqual(self.backend.extraction(vid)['review_status'],'needs_review')
     def test_bad_evidence_fails_without_eligibility(self):
         class Bad(FakeLLM):

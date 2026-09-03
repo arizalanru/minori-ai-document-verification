@@ -2,6 +2,7 @@
 
 import re
 from datetime import date
+from app.domain.document_contracts import REQUIRED_FIELDS
 
 
 def calculate_age(birth_date, reference_date):
@@ -70,11 +71,11 @@ def evaluate_rules(snapshot, profile):
         ("KTP",),
     )
 
-    other_nik = value("IJAZAH", "nik")
-    nik_conflict = bool(nik and other_nik and nik != other_nik)
+    identity_kinds = tuple(dict.fromkeys(("KTP", "IJAZAH", *required_documents)))
     nik_sources = tuple(
-        kind for kind in ("KTP", "IJAZAH") if value(kind, "nik")
+        kind for kind in identity_kinds if value(kind, "nik")
     )
+    nik_conflict = len({value(kind, "nik") for kind in nik_sources}) > 1
     if not nik_sources:
         add(
             "NIK_CONSISTENCY",
@@ -93,14 +94,14 @@ def evaluate_rules(snapshot, profile):
     else:
         # Ijazah tidak wajib memuat NIK; konflik diperiksa dari sumber yang ada.
         reason = (
-            "NIK sama pada kedua sumber"
-            if len(nik_sources) == 2
+            "NIK sama pada sumber yang tersedia"
+            if len(nik_sources) >= 2
             else "Hanya satu sumber NIK tersedia; tidak ada konflik yang "
             "terdeteksi. Belum ada pembandingan antardokumen"
         )
         add("NIK_CONSISTENCY", "PASS", reason, nik_sources)
 
-    names = [value(kind, "nama") for kind in ("KTP", "IJAZAH")]
+    names = [value(kind, "nama") for kind in identity_kinds]
     names_match = all(names) and len(
         {" ".join(name.upper().split()) for name in names}
     ) == 1
@@ -108,17 +109,17 @@ def evaluate_rules(snapshot, profile):
         "IDENTITY_CONSISTENCY",
         "PASS" if names_match else "UNKNOWN",
         "Nama sesuai" if names_match else "Nama belum lengkap atau berbeda",
-        ("KTP", "IJAZAH"),
+        identity_kinds,
         "Periksa kedua sumber" if not names_match else "",
     )
 
     birth_date = value("KTP", "tanggal_lahir")
-    other_birth_date = value("IJAZAH", "tanggal_lahir")
+    other_birth_dates = [value(k, "tanggal_lahir") for k in identity_kinds if k != "KTP" and value(k, "tanggal_lahir")]
     age = None
     if (
         birth_date
         and is_verified("KTP")
-        and not (other_birth_date and birth_date != other_birth_date)
+        and not any(birth_date != other for other in other_birth_dates)
     ):
         try:
             if not re.fullmatch(r"[0-9]{4}-[0-9]{2}-[0-9]{2}", birth_date):
@@ -177,10 +178,7 @@ def evaluate_rules(snapshot, profile):
         ("IJAZAH",),
     )
 
-    required_fields = {
-        "KTP": ("nama", "nik", "tanggal_lahir", "alamat"),
-        "IJAZAH": ("nama", "pendidikan_terakhir", "nomor_dokumen"),
-    }
+    required_fields = {kind: REQUIRED_FIELDS[kind] for kind in identity_kinds}
     empty_fields = [
         f"{document_type}.{field_name}"
         for document_type, field_names in required_fields.items()
@@ -193,7 +191,7 @@ def evaluate_rules(snapshot, profile):
         "Field kosong: " + ", ".join(empty_fields)
         if empty_fields
         else "Field wajib tersedia",
-        ("KTP", "IJAZAH"),
+        identity_kinds,
     )
     return results
 

@@ -1,14 +1,19 @@
 import hashlib
 import json
+import logging
 import uuid
-from datetime import datetime, timezone
+from datetime import date, datetime, timezone
 from importlib.metadata import PackageNotFoundError, version
 from pathlib import Path
 
 from app.core.errors import DomainError
 from app.db.repository import Database
 from app.domain.rules import aggregate, evaluate_rules
+from app.domain.document_contracts import SCHEMAS, REQUIRED_FIELDS, EXTRA_FIELDS, DATE_FIELDS, validate_document
 from app.storage.files import inspect_image
+
+
+logger = logging.getLogger(__name__)
 
 
 DOCUMENT_TYPES = ("KTP", "KK", "IJAZAH", "TRANSKRIP", "SKCK", "MCU")
@@ -19,7 +24,7 @@ EXTRACTED_FIELDS = (
     "alamat",
     "pendidikan_terakhir",
     "nomor_dokumen",
-)
+) + EXTRA_FIELDS
 
 
 def now():
@@ -140,6 +145,7 @@ class Backend:
         for row in rows:
             fields = {}
             blocks = []
+            members = []
             if row["active_run_id"]:
                 run = one(
                     connection,
@@ -147,6 +153,7 @@ class Backend:
                     (row["active_run_id"],),
                 )
                 fields = json.loads(run["fields_json"] or "{}")
+                members = fields.pop("anggota", [])
                 blocks = json.loads(run["blocks_json"] or "[]")
                 for field in fields.values():
                     field["source_kind"] = "extraction"
@@ -159,6 +166,7 @@ class Backend:
                 "review_status": row["review_status"],
                 "fields": fields,
                 "blocks": blocks,
+                "members": members,
                 "version_number": row["number"],
             }
         return {"documents": documents}
@@ -418,11 +426,7 @@ class Backend:
         blocks = []
         fields = {}
         error = None
-        status = (
-            "MANUAL_ONLY"
-            if document_type not in ("KTP", "IJAZAH")
-            else "SUCCEEDED"
-        )
+        status = "SUCCEEDED"
         import time
 
         start = time.perf_counter()
@@ -443,13 +447,10 @@ class Backend:
                 blocks = ocr.extract(file_path)
                 if not blocks:
                     raise DomainError("OCR_EMPTY", "Tidak ada teks terbaca")
-                from app.domain.schemas import ExtractionResult
-                from app.domain.evidence import validate_extraction
-
-                fields = ExtractionResult.model_validate(
+                fields = SCHEMAS[document_type].model_validate(
                     llm.extract(document_type, blocks)
                 ).model_dump()
-                validate_extraction(fields, blocks)
+                validate_document(fields, blocks, document_type)
                 if document_type == "KTP":
                     fields["nomor_dokumen"] = dict(fields["nik"])
                 metadata.update(getattr(llm, "metadata", {}))
@@ -459,7 +460,11 @@ class Backend:
                 status = "FAILED"
                 error = exc.code
                 fields = {}
-            except Exception:
+            except Exception as exc:
+                logger.warning(
+                    "Document processing failed unexpectedly (type=%s)",
+                    type(exc).__name__,
+                )
                 status = "FAILED"
                 error = "PROCESS_ERROR"
                 fields = {}
@@ -646,6 +651,12 @@ class Backend:
                     "nomor_dokumen": corrections["nik"],
                 }
             for name, value in corrections.items():
+                if name in DATE_FIELDS - {"tanggal_lahir"} and value is not None:
+                    try:
+                        if date.fromisoformat(value.strip()).isoformat() != value.strip():
+                            raise ValueError()
+                    except ValueError:
+                        raise DomainError("INVALID_CORRECTION", "Tanggal dokumen harus sah dalam format YYYY-MM-DD") from None
                 existing[name] = {
                     "value": value.strip() if isinstance(value, str) else None,
                     "source_kind": "review",
@@ -655,10 +666,10 @@ class Backend:
                     "status": "reviewed",
                 }
             after = {**before, **existing}
-            required_fields = {
-                "KTP": ("nama", "nik", "tanggal_lahir", "alamat"),
-                "IJAZAH": ("nama", "pendidikan_terakhir", "nomor_dokumen"),
-            }.get(document_version["document_type"], ())
+            required_fields = REQUIRED_FIELDS[document_version["document_type"]]
+            if action == "verify" and document_version["document_type"] == "KK":
+                if any(after.get(k, {}).get("source_kind") != "review" for k in ("nama", "nik")):
+                    raise DomainError("KK_SELECTION_REQUIRED", "Pilih anggota KK yang merupakan peserta dan periksa gambar")
             if action == "verify" and any(
                 not after.get(field, {}).get("value") for field in required_fields
             ):

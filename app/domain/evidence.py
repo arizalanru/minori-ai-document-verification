@@ -2,6 +2,7 @@ import re
 from datetime import date, datetime
 
 from app.core.errors import DomainError
+from app.domain.document_contracts import DATE_FIELDS
 
 
 def validate_extraction(data, blocks):
@@ -33,7 +34,7 @@ def validate_extraction(data, blocks):
             raise DomainError(
                 "OUTPUT_INVALID", f"Nilai/bukti {name} belum lengkap"
             )
-        if name == "tanggal_lahir":
+        if name in DATE_FIELDS:
             try:
                 if not re.fullmatch(r"[0-9]{4}-[0-9]{2}-[0-9]{2}", value):
                     raise ValueError()

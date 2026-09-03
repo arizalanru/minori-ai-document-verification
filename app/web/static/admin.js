@@ -18,6 +18,11 @@ const fieldNames = {
   alamat: "Alamat",
   pendidikan_terakhir: "Pendidikan terakhir",
   nomor_dokumen: "Nomor dokumen",
+  institusi: "Nama institusi pendidikan",
+  tanggal_terbit: "Tanggal terbit (YYYY-MM-DD)",
+  tanggal_berakhir: "Tanggal berakhir jika tercantum (YYYY-MM-DD)",
+  tanggal_pemeriksaan: "Tanggal pemeriksaan (YYYY-MM-DD)",
+  kesimpulan_dokter: "Kesimpulan dokter sesuai tulisan pada laporan",
 };
 
 const ruleNames = {
@@ -82,6 +87,28 @@ const reviewActionLabels = {
   confirm_ineligible: "Hasil tidak memenuhi syarat dikonfirmasi",
   change_profile: "Jenis pemeriksaan diubah",
 };
+
+const processingFailureMessages = {
+  LLM_KEY_MISSING: "Layanan pembacaan belum dikonfigurasi.",
+  LLM_SCHEMA_ERROR: "Format permintaan pembacaan belum didukung layanan.",
+  PROVIDER_BAD_REQUEST: "Permintaan pembacaan ditolak layanan.",
+  PROVIDER_RATE_LIMIT: "Layanan sedang mencapai batas penggunaan.",
+  PROVIDER_BUSY: "Layanan pembacaan sedang sibuk.",
+  LLM_TIMEOUT: "Layanan pembacaan terlalu lama merespons.",
+  LLM_NETWORK_ERROR: "Jaringan ke layanan pembacaan sedang bermasalah.",
+  LLM_ACCESS_DENIED: "Layanan pembacaan belum dapat diakses.",
+  MODEL_UNAVAILABLE: "Model pembacaan sedang tidak tersedia.",
+  OUTPUT_INVALID: "Hasil pembacaan tidak dapat diverifikasi.",
+  OCR_EMPTY: "Tidak ada teks yang dapat dibaca dari gambar.",
+  OCR_ERROR: "Gambar belum berhasil dibaca.",
+};
+
+function processingFailureMessage(code) {
+  return (
+    processingFailureMessages[code] ||
+    "Dokumen belum berhasil dibaca karena kendala layanan."
+  );
+}
 
 function element(tag, text, className) {
   const node = document.createElement(tag);
@@ -754,7 +781,7 @@ function renderField(key, selectedDocument) {
     ),
   );
 
-  const input = element("input");
+  const input = element(key === "kesimpulan_dokter" ? "textarea" : "input");
   input.id = `field-${key}`;
   input.dataset.field = key;
   input.value = field.value ?? "";
@@ -789,6 +816,13 @@ function renderField(key, selectedDocument) {
 }
 
 function fieldGroups(selectedDocument) {
+  const extraGroups = {
+    KK: { main: ["nomor_dokumen", "nama", "nik", "tanggal_lahir", "alamat"], additional: [] },
+    TRANSKRIP: { main: ["nama", "institusi", "nomor_dokumen"], additional: ["nik", "tanggal_lahir", "pendidikan_terakhir"] },
+    SKCK: { main: ["nama", "nomor_dokumen", "tanggal_terbit", "tanggal_berakhir"], additional: ["nik", "tanggal_lahir", "alamat"] },
+    MCU: { main: ["nama", "tanggal_pemeriksaan", "kesimpulan_dokter", "nomor_dokumen"], additional: ["nik", "tanggal_lahir"] },
+  };
+  if (extraGroups[state.kind]) return extraGroups[state.kind];
   if (state.kind === "KTP") {
     return { main: ["nama", "nik", "tanggal_lahir", "alamat"], additional: [] };
   }
@@ -851,6 +885,31 @@ function renderDocument() {
     );
 
   const groups = fieldGroups(selectedDocument);
+  if (state.kind === "MCU") {
+    $("fields").append(element("p", "Salin kesimpulan yang tertulis. Aplikasi tidak menafsirkan hasil laboratorium atau menentukan kelayakan kesehatan.", "helper-text"));
+  }
+  if (state.kind === "TRANSKRIP") {
+    $("fields").append(element("p", "Ekstraksi dasar identitas dan institusi. Tabel nilai tetap diperiksa manual.", "helper-text"));
+  }
+  if (state.kind === "KK") {
+    $("fields").append(element("p", "Pilih anggota yang merupakan peserta, lalu cocokkan nama dan NIK dengan KTP serta gambar KK. Kepala keluarga tidak dipilih otomatis. Jika bacaan salah, koreksi identitas di bawah.", "helper-text"));
+    for (const member of selectedDocument.members || []) {
+      const button = element("button", `Pilih ${member.nama.value || "nama belum terbaca"} — ${member.nik.value || "NIK belum terbaca"}`, "button secondary");
+      button.type = "button";
+      button.disabled = !member.nama.value || !member.nik.value;
+      button.onclick = () => {
+        if (hasReviewDraft() && !confirm("Pilihan anggota akan mengganti nama, NIK, dan tanggal lahir pada form. Lanjutkan?")) return;
+        for (const key of ["nama", "nik", "tanggal_lahir"]) {
+          const input = $(`field-${key}`);
+          input.value = member[key].value || "";
+        }
+        $("confirmed").checked = false;
+        highlight([...new Set(Object.values(member).flatMap(f => f.evidence_ids || []))]);
+        notice("Anggota dipilih pada form, belum disimpan. Cocokkan dengan gambar dan isi catatan pemeriksaan.");
+      };
+      $("fields").append(button);
+    }
+  }
   for (const key of groups.main) {
     $("fields").append(renderField(key, selectedDocument));
   }
@@ -1002,7 +1061,7 @@ $("process").onclick = () => {
         ? "Pembacaan selesai. Cocokkan data dengan gambar sebelum verifikasi."
         : result.status === "MANUAL_ONLY"
           ? "Dokumen ini tidak dibaca otomatis dan perlu diperiksa manual."
-          : `Layanan pembacaan dokumen belum berhasil: ${result.error_code || result.status}. Hasil ini bukan ketidaklayakan peserta.`,
+          : `${processingFailureMessage(result.error_code)} Hasil ini bukan ketidaklayakan peserta.`,
       result.status === "FAILED",
     );
   });

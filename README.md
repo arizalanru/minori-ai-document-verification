@@ -16,8 +16,20 @@ autentikasi atau kontrol akses produksi.
   kebijakan resmi program.
 - Hasil `ELIGIBLE` hanya menyatakan aturan administrasi demo terpenuhi. Hasil ini
   bukan keputusan penerimaan atau bukti keaslian dokumen.
-- OCR dan LLM hanya memproses KTP dan ijazah. Jenis dokumen lain tetap memerlukan
-  pemeriksaan manual; aplikasi tidak melakukan analisis medis.
+- Pipeline OCR dan LLM mendukung ekstraksi dasar KTP, ijazah, KK, transkrip,
+  SKCK, dan MCU. Semua hasil tetap memerlukan review admin. KK mengekstrak
+  daftar anggota; peserta harus dipilih admin, bukan otomatis kepala keluarga.
+- Pada satu uji live dengan gambar KK sintetis, OCR menangkap dua anggota tetapi
+  hasil LLM hanya memuat satu anggota. Peserta tetap berhasil dipilih dan
+  diverifikasi melalui review admin. Hasil ini tidak membuktikan bahwa seluruh
+  anggota KK selalu terekstrak lengkap dan bukan klaim akurasi 100%.
+- Transkrip hanya mengekstrak identitas/institusi, bukan tabel nilai. MCU hanya
+  menyalin kesimpulan yang tertulis, tidak mendiagnosis atau menetapkan kelayakan
+  kesehatan. ELIGIBLE tidak berarti peserta dinyatakan sehat atau layak bekerja.
+- Ekstraksi empat jenis tambahan memiliki cakupan tes offline. Beberapa kasus
+  schema Gemini juga telah diuji live dengan data sintetis, tetapi hasil tersebut
+  bukan pengukuran akurasi OCR/LLM atau bukti keberhasilan end-to-end untuk
+  seluruh variasi dokumen.
 - Input hanya JPEG/PNG satu halaman. PDF dan dokumen multi-halaman belum
   didukung.
 - Penyimpanan memakai kolom JSON di SQLite. Belum ada migrasi untuk mengubahnya
@@ -133,7 +145,8 @@ sintetis dan dapat melakukan hingga dua panggilan LLM melalui server lokal.
 
 Upload memvalidasi format, ukuran, dan dimensi gambar sebelum menyimpan versi
 baru. Saat pemrosesan dimulai, PaddleOCR menghasilkan blok teks beserta posisi
-buktinya. Gemini mengubah blok tersebut menjadi enam field terstruktur tanpa
+buktinya. Gemini memakai schema per jenis dokumen dengan enam field dasar serta
+field tambahan seperti daftar anggota KK, institusi, tanggal, dan kesimpulan dokter tanpa
 membuat keputusan kelayakan. Domain kemudian memvalidasi schema, nilai, kutipan,
 dan ID bukti sebelum hasil dipublikasikan.
 
@@ -143,3 +156,25 @@ aturan demo. Nilai `PASS`, `FAIL`, atau `UNKNOWN` digabungkan menjadi
 memperbaiki nilai bila perlu, dan mencatat alasan review. Setiap perubahan
 membatalkan evaluasi lama sebagai hasil aktif, tetapi riwayat evaluasi dan review
 tetap disimpan.
+
+## Uji enam dokumen
+
+Jalankan `python scripts/generate_six_document_fixtures.py` untuk membuat enam
+gambar sintetis di direktori `var/six_document_fixtures/<id>`. Tidak ada panggilan
+API dari generator. File `.expected.json` adalah fixture simulasi, bukan output AI.
+
+Buat peserta baru dengan profil enam dokumen. Unggah tiap PNG, jalankan pembacaan
+satu kali per dokumen, lalu cocokkan hasil dengan gambar sebelum verifikasi.
+Pada KK pilih PESERTA DEMO A, bukan KEPALA KELUARGA DEMO. Simpan catatan dan
+konfirmasi halaman. Jangan mengulang terus saat provider gagal.
+
+Hasil yang diharapkan sebelum review adalah REVIEW. Setelah seluruh data wajib
+diperiksa dan konsisten, hasil administrasi dapat ELIGIBLE; ini bukan keputusan
+medis. Kesimpulan MCU sintetis sengaja menyebut pemeriksaan lanjutan untuk
+menunjukkan bahwa pemeriksaan kelengkapan tidak sama dengan penilaian kesehatan.
+
+Sebelum memakai data peserta nyata perlu implementasi autentikasi, kontrol
+akses, retensi, serta persetujuan pemrosesan melalui provider yang sesuai.
+Jangan mengganti database atau menghapus `var` untuk menguji perubahan ini.
+Gunakan peserta demo baru; evaluasi yang tersimpan sebelumnya adalah snapshot
+aturan lama dan perlu dievaluasi ulang untuk memakai validasi tambahan.
