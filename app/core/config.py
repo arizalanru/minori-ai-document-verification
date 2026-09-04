@@ -1,4 +1,4 @@
-"""Konfigurasi lokal; jangan mencetak Settings karena dapat memuat rahasia."""
+"""Konfigurasi aplikasi; jangan mencetak Settings karena dapat memuat rahasia."""
 
 from pathlib import Path
 
@@ -20,6 +20,8 @@ class Settings(BaseSettings):
     llm_timeout_seconds: int = 60
     max_upload_bytes: int = 10 * 1024 * 1024
     max_image_pixels: int = 20_000_000
+    demo_access_username: str = ""
+    demo_access_password: SecretStr = SecretStr("")
 
     def resolve_path(self, path: Path) -> Path:
         return path if path.is_absolute() else PROJECT_ROOT / path
